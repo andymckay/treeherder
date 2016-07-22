@@ -1,6 +1,8 @@
 import hashlib
 import logging
 import re
+import calendar
+from dateutil import parser
 
 import requests
 from django.conf import settings
@@ -78,6 +80,7 @@ def make_request(url, method='GET', headers=None,
 
 
 def fetch_json(url, params=None):
+
     response = make_request(url,
                             params=params,
                             headers={'Accept': 'application/json'})
@@ -162,3 +165,7 @@ def get_guid_root(guid):
     if "_" in str(guid):
         return str(guid).split("_", 1)[0]
     return guid
+
+
+def to_timestamp(datestr):
+    return calendar.timegm(parser.parse(datestr).utctimetuple())

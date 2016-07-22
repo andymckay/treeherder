@@ -1,6 +1,7 @@
 import logging
 
-from treeherder.etl.common import fetch_json
+from django.conf import settings
+from treeherder.etl.common import fetch_json, to_timestamp
 from treeherder.model.derived.jobs import JobsModel
 from treeherder.model.models import Repository
 from django.core.exceptions import ObjectDoesNotExist
@@ -17,12 +18,21 @@ class ResultsetLoader:
         logger.info("Begin processing")
         transformer = self.get_transformer(resultset, exchange)
         try:
-            transformer.transform()
-            repo = Repository.objects.get(url=transformer.repo_url)
+
+
+            # TODO: We have the same url for several repos, like gaia.
+            # So we may want to store the branch to determine which repo
+            # is right.  Or perhaps there's another way.  Check with garndt
+            # when he gets back.
+
+
+
+
+            repo = Repository.objects.filter(url=transformer.repo_url).first()
+            transformed_data = transformer.transform(repo.name)
 
             with JobsModel(repo.name) as jobs_model:
-                jobs_model.store_result_set_data(
-                    transformer.transform())
+                jobs_model.store_result_set_data([transformed_data])
 
         except ObjectDoesNotExist:
             newrelic.agent.record_custom_event("skip_unknown_repository",
@@ -48,7 +58,8 @@ class GithubTransformer:
         self.exchange = exchange
 
         try:
-            self.repo_url = resultset["details"]["event.head.repo.url"]
+            self.repo_url = resultset["details"]["event.head.repo.url"].replace(
+                ".git", "")
         except:
             raise PulseResultsetError(
                 "Unable to find Github repo.url in resultset: {}".format(
@@ -71,18 +82,43 @@ class GithubPushTransformer(GithubTransformer):
     #     version:1
     # }
 
-    def transform(self):
+    def transform(self, repository):
         commit = self.resultset["details"]["event.head.sha"]
         push_url = "https://api.github.com/repos/{}/{}/commits".format(
             self.resultset["organization"],
             self.resultset["repository"]
         )
-        params = {"sha": commit}
-        commit1 = fetch_json(push_url, params)[0]
+        params = {
+            "sha": commit,
+            "client_id": settings.GITHUB_CLIENT_ID,
+            "client_secret": settings.GITHUB_CLIENT_SECRET
+        }
+        try:
+            commits = fetch_json(push_url, params)
+            first_commit = commits[0]
+            resultset = {
+                "revision": first_commit["sha"],
+                "push_timestamp": to_timestamp(first_commit["commit"]["author"]["date"]),
+                "author": first_commit["commit"]["author"]["email"],
+            }
 
-        logger.info(commit1["sha"])
-        logger.info(commit1["commit"]["author"]["email"])
+            revisions = []
+            for full_commit in commits:
+                commit = full_commit["commit"]
+                revisions.append({
+                    "comment": commit["message"],
+                    "repository": repository,
+                    "author": "{} {}".format(commit["author"]["name"], commit["author"]["email"]),
+                    "revision": full_commit["sha"]
+                })
 
+            resultset["revisions"] = revisions
+
+            logger.info(resultset)
+            return resultset
+
+        except Exception as ex:
+            logger.exception("Unable to get commit info", exc_info=ex)
         # url = "https://api.github.com/repos/mozilla/fxa-auth-server/commits?sha=8ad10c9435217397627b98ff3753eff9e22cdd9d"
         # do the transformation of what we have into a skeleton RS and either
         # schedule a celery task to fill-in, or just do it here.  The RPM may

@@ -452,24 +452,24 @@ PULSE_DATA_INGESTION_SOURCES = env.json(
 PULSE_RESULTSET_SOURCES = env.json(
     "PULSE_RESULTSET_SOURCES",
     default=[
-        {
-            "exchange": "exchange/taskcluster-github/v1/push",
-            "projects": [
-                '#'
-            ],
-            "destinations": [
-                '#'
-            ]
-        },
-        {
-            "exchange": "exchange/taskcluster-github/v1/pull-request",
-            "projects": [
-                '#'
-            ],
-            "destinations": [
-                '#'
-            ]
-        },
+        # {
+        #     "exchange": "exchange/taskcluster-github/v1/push",
+        #     "projects": [
+        #         '#'
+        #     ],
+        #     "destinations": [
+        #         '#'
+        #     ]
+        # },
+        # {
+        #     "exchange": "exchange/taskcluster-github/v1/pull-request",
+        #     "projects": [
+        #         '#'
+        #     ],
+        #     "destinations": [
+        #         '#'
+        #     ]
+        # },
         {
             "exchange": "exchange/treeherder-test/github/push",
             "projects": [
